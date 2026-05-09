@@ -1,0 +1,11 @@
+{
+  "brand_name": "Acne Studios",
+  "website_url": "https://www.acnestudios.com",
+  "social_handles": {
+    "instagram": "acnestudios"
+  },
+  "crawl_depth": 0,
+  "max_images": 50,
+  "min_resolution": 512,
+  "output_dir": "outputs/acne_studios"
+}
