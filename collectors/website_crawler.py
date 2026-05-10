@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import re
-import time
 from collections import deque
 from typing import Generator
 from urllib.parse import urljoin, urlparse
@@ -61,12 +60,66 @@ def _extract_text(soup: BeautifulSoup) -> str:
     return re.sub(r"\s{2,}", " ", text).strip()
 
 
+def _get_img_src(img) -> str:
+    src = img.get("data-src") or img.get("data-lazy-src") or ""
+    if src:
+        return src
+    ds = img.get("data-srcset", "").strip()
+    if ds:
+        parts = ds.split(",")[0].strip().split()
+        if parts:
+            return parts[0]
+    return img.get("src", "")
+
+
+def _extract_image_metas(soup: BeautifulSoup, page_url: str) -> list[dict]:
+    metas = []
+
+    def clean(url: str) -> str:
+        url = url.strip()
+        if url.startswith("//"):
+            url = "https:" + url
+        return urljoin(page_url, url)
+
+    for img in soup.find_all("img"):
+        try:
+            src = _get_img_src(img)
+            if not src or src.startswith("data:"):
+                continue
+            surrounding = ""
+            parent = img.parent
+            if parent:
+                surrounding = parent.get_text(separator=" ", strip=True)[:200]
+            metas.append({
+                "url": clean(src),
+                "alt": img.get("alt", ""),
+                "surrounding_text": surrounding,
+                "source_page": page_url,
+            })
+        except Exception:
+            continue
+
+    for source in soup.find_all("source"):
+        try:
+            srcset = source.get("srcset", "") or source.get("data-srcset", "")
+            for part in srcset.split(","):
+                part = part.strip().split()[0] if part.strip() else ""
+                if part and not part.startswith("data:"):
+                    metas.append({"url": clean(part), "alt": "", "surrounding_text": "", "source_page": page_url})
+        except Exception:
+            continue
+
+    return metas
+
+
 class WebsiteCrawler:
     def __init__(self, config: BrandConfig) -> None:
         self.config = config
         self.origin = config.website_url.rstrip("/")
         self._visited: set[str] = set()
         self._session: aiohttp.ClientSession | None = None
+        self._image_metas: list[dict] = []
+        self._seen_image_urls: set[str] = set()
 
     async def _get_session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
@@ -81,7 +134,6 @@ class WebsiteCrawler:
             async with session.get(url, allow_redirects=True) as resp:
                 if resp.status == 200 and "text/html" in resp.content_type:
                     return await resp.text(errors="replace")
-                logger.debug("skipped_url", url=url, status=resp.status)
         except Exception as exc:
             logger.warning("fetch_failed", url=url, error=str(exc))
         return None
@@ -90,6 +142,8 @@ class WebsiteCrawler:
         pages: list[PageContent] = []
         queue: deque[tuple[str, int]] = deque([(self.origin, 0)])
         self._visited.add(self.origin)
+        self._image_metas = []
+        self._seen_image_urls = set()
 
         logger.info("crawl_started", origin=self.origin, max_depth=self.config.crawl_depth)
 
@@ -106,18 +160,22 @@ class WebsiteCrawler:
             if meta_tag and meta_tag.get("content"):
                 meta_desc = meta_tag["content"].strip()
 
-            body_text = _extract_text(soup)
+            body_text = _extract_text(BeautifulSoup(html, "lxml"))
             page_type = _classify_page(url)
 
-            pages.append(
-                PageContent(
-                    url=url,
-                    title=title,
-                    body_text=body_text,
-                    meta_description=meta_desc,
-                    page_type=page_type,
-                )
-            )
+            pages.append(PageContent(
+                url=url,
+                title=title,
+                body_text=body_text,
+                meta_description=meta_desc,
+                page_type=page_type,
+            ))
+
+            for meta in _extract_image_metas(soup, url):
+                if meta["url"] not in self._seen_image_urls:
+                    self._seen_image_urls.add(meta["url"])
+                    self._image_metas.append(meta)
+
             logger.info("page_crawled", url=url, depth=depth, page_type=page_type, text_len=len(body_text))
 
             if depth < self.config.crawl_depth:
@@ -135,32 +193,10 @@ class WebsiteCrawler:
         logger.info("crawl_finished", pages_collected=len(pages))
         return pages
 
+    def get_collected_image_metas(self) -> list[dict]:
+        return self._image_metas
+
     def extract_image_urls(self, html: str, page_url: str) -> Generator[dict, None, None]:
         soup = BeautifulSoup(html, "lxml")
-
-        def clean(url: str) -> str:
-            url = url.strip()
-            if url.startswith("//"):
-                url = "https:" + url
-            return urljoin(page_url, url)
-
-        for img in soup.find_all("img"):
-            src = img.get("data-src") or img.get("data-lazy-src") or img.get("src", "")
-            if src:
-                surrounding = ""
-                parent = img.parent
-                if parent:
-                    surrounding = parent.get_text(separator=" ", strip=True)[:200]
-                yield {
-                    "url": clean(src),
-                    "alt": img.get("alt", ""),
-                    "surrounding_text": surrounding,
-                    "source_page": page_url,
-                }
-
-        for source in soup.find_all("source"):
-            srcset = source.get("srcset", "")
-            for part in srcset.split(","):
-                part = part.strip().split()[0]
-                if part:
-                    yield {"url": clean(part), "alt": "", "surrounding_text": "", "source_page": page_url}
+        for meta in _extract_image_metas(soup, page_url):
+            yield meta

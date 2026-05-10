@@ -4,7 +4,11 @@ import json
 from pathlib import Path
 from typing import Optional
 
+<<<<<<< HEAD
 from pydantic import BaseModel, HttpUrl, field_validator
+=======
+from pydantic import BaseModel
+>>>>>>> 40aa1e8 (feat: Brand Intelligence Agent — autonomous fashion brand DNA analysis)
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -34,6 +38,10 @@ class AppSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     anthropic_api_key: str = ""
+<<<<<<< HEAD
+=======
+    groq_api_key: str = ""
+>>>>>>> 40aa1e8 (feat: Brand Intelligence Agent — autonomous fashion brand DNA analysis)
     request_timeout: int = 30
     request_delay_ms: int = 800
     max_concurrent_requests: int = 4

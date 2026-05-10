@@ -1,7 +1,10 @@
+<<<<<<< HEAD
 
 .venv/
 venv/
 env/
+=======
+>>>>>>> 40aa1e8 (feat: Brand Intelligence Agent — autonomous fashion brand DNA analysis)
 .env
 __pycache__/
 *.pyc

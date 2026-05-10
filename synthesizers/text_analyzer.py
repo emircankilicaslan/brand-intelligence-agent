@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import json
 import re
+<<<<<<< HEAD
 from collections import Counter
+=======
+>>>>>>> 40aa1e8 (feat: Brand Intelligence Agent — autonomous fashion brand DNA analysis)
 
 from agent.config import settings
 from agent.logging_setup import get_logger
@@ -12,7 +15,38 @@ logger = get_logger(__name__)
 
 
 def _call_llm(system: str, user: str, max_tokens: int = 1200) -> str:
+<<<<<<< HEAD
     # Try ollama first (free, runs locally)
+=======
+    # 1. Groq (free, fast, no credit card)
+    groq_key = getattr(settings, "groq_api_key", "") or ""
+    if groq_key:
+        try:
+            import requests as _req
+            headers = {"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"}
+            payload = {
+                "model": "llama-3.3-70b-versatile",
+                "messages": [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ],
+                "max_tokens": max_tokens,
+                "temperature": 0.4,
+            }
+            resp = _req.post("https://api.groq.com/openai/v1/chat/completions",
+                             headers=headers, json=payload, timeout=60)
+            if resp.status_code == 200:
+                result = resp.json()["choices"][0]["message"]["content"].strip()
+                if result:
+                    logger.debug("llm_groq_ok")
+                    return result
+            else:
+                logger.warning("groq_error", status=resp.status_code, body=resp.text[:200])
+        except Exception as exc:
+            logger.debug("groq_unavailable", error=str(exc))
+
+    # 2. Ollama (local, free, needs ollama running)
+>>>>>>> 40aa1e8 (feat: Brand Intelligence Agent — autonomous fashion brand DNA analysis)
     try:
         import requests as _req
         payload = {
@@ -30,7 +64,11 @@ def _call_llm(system: str, user: str, max_tokens: int = 1200) -> str:
     except Exception as exc:
         logger.debug("ollama_unavailable", error=str(exc))
 
+<<<<<<< HEAD
     # Fall back to Anthropic API if key is configured
+=======
+    # 3. Anthropic Claude (paid)
+>>>>>>> 40aa1e8 (feat: Brand Intelligence Agent — autonomous fashion brand DNA analysis)
     if settings.anthropic_api_key:
         try:
             import anthropic
@@ -45,7 +83,11 @@ def _call_llm(system: str, user: str, max_tokens: int = 1200) -> str:
         except Exception as exc:
             logger.error("claude_call_failed", error=str(exc))
 
+<<<<<<< HEAD
     logger.warning("no_llm_available", note="Neither ollama nor Anthropic API is reachable")
+=======
+    logger.warning("no_llm_available", note="Configure GROQ_API_KEY in .env for free LLM access")
+>>>>>>> 40aa1e8 (feat: Brand Intelligence Agent — autonomous fashion brand DNA analysis)
     return ""
 
 
@@ -95,7 +137,11 @@ Return a JSON object with these exact keys:
     except Exception:
         logger.warning("voice_analysis_parse_failed", brand=brand_name, raw_snippet=raw[:200])
         return {
+<<<<<<< HEAD
             "brand_voice": raw[:300] if raw else "Analysis unavailable.",
+=======
+            "brand_voice": raw[:400] if raw else "Analysis unavailable.",
+>>>>>>> 40aa1e8 (feat: Brand Intelligence Agent — autonomous fashion brand DNA analysis)
             "recurring_vocabulary": [],
             "stated_values": [],
             "positioning_statement": "",
@@ -131,7 +177,10 @@ def describe_visual_clusters(
         description = _call_llm(system, user, max_tokens=200)
         if description:
             cluster.description = description
+<<<<<<< HEAD
 
+=======
+>>>>>>> 40aa1e8 (feat: Brand Intelligence Agent — autonomous fashion brand DNA analysis)
         cluster_descriptions.append(cluster)
 
     return cluster_descriptions

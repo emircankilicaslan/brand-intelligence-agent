@@ -1,11 +1,9 @@
 {
-  "brand_name": "Paloma Wool",
-  "website_url": "https://palomawool.com",
-  "social_handles": {
-    "instagram": "palomawool"
-  },
+  "brand_name": "Acne Studios Men",
+  "website_url": "https://www.acnestudios.com/emea/tr/en/man",
+  "social_handles": {},
   "crawl_depth": 2,
   "max_images": 150,
   "min_resolution": 512,
-  "output_dir": "outputs/paloma_wool"
+  "output_dir": "outputs/acne_studios_men"
 }
