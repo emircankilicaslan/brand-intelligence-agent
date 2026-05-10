@@ -46,21 +46,12 @@ class BrandIntelligenceAgent:
         image_metas: list[dict] = []
         seen_urls: set[str] = set()
 
-<<<<<<< HEAD
-        for page in pages:
-            try:
-                import aiohttp
-                timeout = aiohttp.ClientTimeout(total=settings.request_timeout)
-                headers = {"User-Agent": settings.user_agent}
-                async with aiohttp.ClientSession(timeout=timeout, headers=headers) as sess:
-=======
         import aiohttp
         timeout = aiohttp.ClientTimeout(total=settings.request_timeout)
         headers = {"User-Agent": settings.user_agent}
         async with aiohttp.ClientSession(timeout=timeout, headers=headers) as sess:
             for page in pages:
                 try:
->>>>>>> 40aa1e8 (feat: Brand Intelligence Agent — autonomous fashion brand DNA analysis)
                     async with sess.get(page.url) as resp:
                         if resp.status == 200:
                             html = await resp.text(errors="replace")
@@ -68,16 +59,9 @@ class BrandIntelligenceAgent:
                                 if meta["url"] not in seen_urls:
                                     seen_urls.add(meta["url"])
                                     image_metas.append(meta)
-<<<<<<< HEAD
-            except Exception as exc:
-                logger.debug("image_url_extract_failed", url=page.url, error=str(exc))
-
-            await asyncio.sleep(settings.request_delay_ms / 1000)
-=======
                 except Exception as exc:
                     logger.debug("image_url_extract_failed", url=page.url, error=str(exc))
                 await asyncio.sleep(settings.request_delay_ms / 1000)
->>>>>>> 40aa1e8 (feat: Brand Intelligence Agent — autonomous fashion brand DNA analysis)
 
         corpus.product_names = list(
             set(

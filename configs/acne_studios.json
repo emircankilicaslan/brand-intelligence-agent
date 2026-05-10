@@ -5,7 +5,7 @@
     "instagram": "acnestudios"
   },
   "crawl_depth": 2,
-  "max_images": 50,
+  "max_images": 150,
   "min_resolution": 512,
   "output_dir": "outputs/acne_studios"
 }
