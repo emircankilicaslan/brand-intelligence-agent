@@ -1,31 +1,33 @@
-# Architecture Document — Brand Intelligence Agent
+# Mimari Doküman — Brand Intelligence Agent
 
-## System Diagram
+> **English summary:** Pipeline architecture of the Brand Intelligence Agent: async crawler → image download → pHash dedup → CLIP fashion classification and clustering → color extraction → LLM text synthesis (Groq → Ollama → Anthropic cascade) → PDF report. Every stage fails gracefully so partial output is always produced. Design decisions, trade-offs and a scaling plan are listed below.
+
+## Sistem diyagramı
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                        CLI (main.py)                        │
-│                  click-based entry point                    │
+│                click tabanlı giriş noktası                  │
 └────────────────────────┬────────────────────────────────────┘
                          │
                          ▼
 ┌─────────────────────────────────────────────────────────────┐
-│               Orchestrator (agent/orchestrator.py)          │
-│   Coordinates the full pipeline; owns error boundaries      │
+│               Orkestratör (agent/orchestrator.py)           │
+│   Tüm hattı yönetir; hata sınırlarını elinde tutar          │
 └──┬──────────────┬──────────────┬───────────────┬────────────┘
    │              │              │               │
    ▼              ▼              ▼               ▼
 WebsiteCrawler  ImageDownloader InstagramColl.  TextAnalyzer
-(async BFS)     (async batch)   (instaloader)   (Groq/Ollama/Claude)
+(async BFS)     (async toplu)   (instaloader)   (Groq/Ollama/Claude)
    │              │
    ▼              ▼
-PageContent[]  raw images on disk
+PageContent[]  diskte ham görseller
    │              │
    │          Deduplicator (pHash, Hamming ≤ 8)
    │              │
-   │          FashionClassifier (CLIP zero-shot / heuristic fallback)
+   │          FashionClassifier (CLIP sıfır-örnek / sezgisel yedek)
    │              │
-   │          VisualClusterer (CLIP embeddings + KMeans)
+   │          VisualClusterer (CLIP gömmeleri + KMeans)
    │              │
    └──────────────┼─────────────────┐
                   ▼                 ▼
@@ -33,91 +35,91 @@ PageContent[]  raw images on disk
                   │                 │
                   └────────┬────────┘
                            ▼
-                     BrandDNA dataclass
+                     BrandDNA veri sınıfı
                            │
                            ▼
                      PDFGenerator (reportlab)
                            │
                            ▼
-                    {brand}_brand_dna.pdf
+                    {marka}_brand_dna.pdf
 ```
 
-## Key Design Decisions
+## Temel tasarım kararları
 
-### 1. Site-agnostic crawling
-The crawler uses breadth-first traversal with no hardcoded selectors. Page type classification (product, about, blog, lookbook, FAQ) is done by URL path pattern matching against a regex dictionary — any brand site maps to these types without per-domain logic. Image extraction handles `src`, `data-src`, `data-lazy-src`, and `srcset` to cover lazy-loading patterns across modern e-commerce stacks.
+### 1. Siteden bağımsız tarama
+Tarayıcı, sabit seçici kullanmadan genişlik öncelikli (BFS) dolaşır. Sayfa türü sınıflandırması (ürün, hakkında, blog, lookbook, SSS), URL yolunun bir düzenli ifade sözlüğüne uyumuyla yapılır; böylece alan adına özel mantık olmadan her marka sitesi bu türlere eşlenir. Görsel çıkarımı, modern e-ticaret altyapılarındaki tembel yükleme örüntülerini kapsamak için `src`, `data-src`, `data-lazy-src` ve `srcset` alanlarını işler.
 
-### 2. Resolution threshold: 512px minimum on the shorter side
-512px is the standard minimum for CLIP (ViT-B/32 native resolution is 224px, but the model is pre-trained on 224–336px crops from larger images). Images below 512px on the shorter side are either UI chrome, decorative thumbnails, or resolution-degraded and add noise to downstream embeddings. Going higher (800px+) rejects valid product thumbnails on image-heavy sites. 512px is the published sweet spot for CLIP downstream tasks.
+### 2. Çözünürlük eşiği: kısa kenarda en az 512 px
+512 px, CLIP için yaygın alt sınırdır (ViT-B/32'nin yerel çözünürlüğü 224 px'tir, ancak model büyük görsellerden alınmış 224–336 px kırpmalarla önceden eğitilmiştir). Kısa kenarı 512 px'in altındaki görseller ya arayüz öğesi, ya süs amaçlı küçük resim ya da çözünürlüğü bozulmuş görsellerdir ve sonraki gömmelere gürültü katar. Daha yükseğe çıkmak (800 px+) görsel ağırlıklı sitelerde geçerli ürün küçük resimlerini eler. 512 px, CLIP'in sonraki görevleri için bilinen dengeli noktadır.
 
-### 3. Perceptual hashing for deduplication
-URL/MD5 deduplication misses the same image served from multiple CDN paths, resized thumbnails, and re-compressed variants. pHash (imagehash library) captures visual similarity across these cases. A Hamming distance threshold of ≤ 8 removes near-identical images while preserving genuinely different shots that happen to share a background or model.
+### 3. Kopya ayıklama için algısal karma
+URL/MD5 ile kopya ayıklama, aynı görselin birden çok CDN yolundan sunulmasını, yeniden boyutlandırılmış küçük resimleri ve yeniden sıkıştırılmış varyantları kaçırır. pHash (imagehash kütüphanesi) bu durumlarda görsel benzerliği yakalar. Hamming mesafesi ≤ 8 eşiği, neredeyse aynı görselleri ayıklarken arka planı ya da modeli paylaşan gerçekten farklı çekimleri korur.
 
-### 4. Two-stage fashion classification
-**Primary:** CLIP zero-shot classification against 12 candidate labels (positive: clothing/garment/model/lookbook/shoes/accessories; negative: logo/UI/landscape/food). No training data or fashion-specific fine-tuning required — generalises to any brand aesthetic.
-**Fallback:** Keyword heuristic on alt text, surrounding page text, and source URL. Activates when transformers is unavailable (e.g. resource-constrained CI environments). Sufficient to maintain pipeline operation with lower precision.
+### 4. İki aşamalı moda sınıflandırma
+**Birincil:** 12 aday etikete (olumlu: giysi/kıyafet/model/lookbook/ayakkabı/aksesuar; olumsuz: logo/arayüz/manzara/yemek) karşı CLIP sıfır-örnek sınıflandırma. Eğitim verisi veya modaya özel ince ayar gerektirmez; her marka estetiğine genellenir.
+**Yedek:** Alt metin, çevre sayfa metni ve kaynak URL üzerinde anahtar kelime sezgisi. `transformers` kullanılamadığında (ör. kaynakları kısıtlı CI ortamları) devreye girer; daha düşük kesinlikle de olsa hattın çalışmasını sürdürmeye yeter.
 
-### 5. LLM provider cascade for text synthesis
-Three providers in priority order:
-1. **Groq** (free, llama3-70b-8192, ~200ms latency) — recommended for default use
-2. **Ollama** (local, llama3.2, zero cost, requires local install and disk space)
-3. **Anthropic Claude** (paid, highest quality, used as fallback)
+### 5. Metin sentezi için LLM sağlayıcı kademesi
+Öncelik sırasıyla üç sağlayıcı:
+1. **Groq** (ücretsiz, llama3-70b-8192, ~200 ms gecikme): varsayılan kullanım için önerilir
+2. **Ollama** (yerel, llama3.2, sıfır maliyet; yerel kurulum ve disk alanı gerekir)
+3. **Anthropic Claude** (ücretli, en yüksek kalite, yedek olarak kullanılır)
 
-If none are reachable, visual analysis runs in full and only textual synthesis sections are marked unavailable. This preserves the pipeline's ability to deliver partial value under any configuration.
+Hiçbirine ulaşılamazsa görsel analiz tam çalışır, yalnızca metin sentezi bölümleri "kullanılamıyor" olarak işaretlenir. Bu, hattın her yapılandırmada kısmi değer sunabilmesini sağlar.
 
-Why not a single provider? Cost, availability, and user constraints vary. A cascade approach makes the agent deployable in constrained environments (no API budget, air-gapped, etc.) without code changes.
+Neden tek sağlayıcı değil? Maliyet, erişilebilirlik ve kullanıcı kısıtları değişir. Kademeli yaklaşım, ajanın kısıtlı ortamlarda (API bütçesi yok, ağdan yalıtılmış vb.) kod değişikliği olmadan dağıtılabilmesini sağlar.
 
-### 6. CLIP embeddings + KMeans for visual clustering
-CLIP projects images into a semantically meaningful 512-dimensional space — similar styling, colour, and subject matter cluster naturally without any fashion-specific labels. KMeans then groups these into 3–5 clusters (set dynamically as `floor(n_images / 20)`, clamped to 3–5). This avoids trivially small or oversized clusters that come from fixed counts on variable image sets.
+### 6. Görsel kümeleme için CLIP gömmeleri + KMeans
+CLIP, görselleri anlamsal olarak anlamlı 512 boyutlu bir uzaya yansıtır; benzer stil, renk ve konu, modaya özel etiket olmadan doğal olarak kümelenir. KMeans bunları 3–5 kümeye ayırır (küme sayısı `floor(n_images / 20)` ile dinamik belirlenir ve 3–5 aralığına sıkıştırılır). Bu, değişken görsel sayılarında sabit küme sayısından doğan çok küçük ya da aşırı büyük kümeleri önler.
 
-### 7. Async collection with configurable pacing
-Both the crawler and image downloader are fully async (aiohttp + asyncio). A semaphore caps concurrent requests at `MAX_CONCURRENT_REQUESTS` (default 4). A per-request sleep of `REQUEST_DELAY_MS` (default 800ms) is inserted between page fetches. Both values are configurable in `.env` — operators can tune for speed vs. politeness depending on the target site.
+### 7. Ayarlanabilir aralıklı asenkron toplama
+Hem tarayıcı hem görsel indirici tamamen asenkrondur (aiohttp + asyncio). Bir semafor eşzamanlı istekleri `MAX_CONCURRENT_REQUESTS` (varsayılan 4) ile sınırlar. Sayfa çekimleri arasına istek başına `REQUEST_DELAY_MS` (varsayılan 800 ms) bekleme konur. Her iki değer `.env` içinde ayarlanabilir; işletenler hedef siteye göre hız ile nezaket arasında denge kurabilir.
 
-### 8. Graceful failure at every stage
-Each major stage (website crawl, image download, Instagram, LLM synthesis) is wrapped in try/except. Failures are logged as structured events with `[warning]` or `[error]` level and the pipeline continues. A brand with a blocked Instagram and an LLM outage still produces a valid PDF with visual data. This was a deliberate design choice: partial value is always better than a crash.
+### 8. Her aşamada zarif hata yönetimi
+Her ana aşama (web taraması, görsel indirme, Instagram, LLM sentezi) try/except ile sarılıdır. Hatalar `[warning]` veya `[error]` düzeyinde yapılandırılmış olay olarak kaydedilir ve hat devam eder. Instagram'ı engelli ve LLM'i kesintide olan bir marka için bile görsel verili geçerli bir PDF üretilir. Bu bilinçli bir tasarım tercihidir: kısmi değer, çökmeden her zaman daha iyidir.
 
-### 9. Instagram rate limiting — design decision and mitigation
-`instaloader` is used in unauthenticated public mode. Instagram enforces hard rate limits on unauthenticated access (typically HTTP 429 after 10–15 requests). The agent:
-- Logs the 429 with structured context: `instagram_collection_failed reason=429 handle=<handle>`
-- Skips Instagram and continues with website data
-- Documents this explicitly in README under anti-bot measures
+### 9. Instagram hız sınırı: tasarım kararı ve hafifletme
+`instaloader` oturumsuz, herkese açık modda kullanılır. Instagram, oturumsuz erişimde sert hız sınırı uygular (genellikle 10–15 istekten sonra HTTP 429). Ajan:
+- 429'u yapılandırılmış bağlamla kaydeder: `instagram_collection_failed reason=429 handle=<kullanıcı>`
+- Instagram'ı atlar ve web sitesi verisiyle devam eder
+- Bunu README'de bot önleme bölümü altında açıkça belgeler
 
-Production mitigations (not implemented, documented for transparency):
-- **Session authentication:** `instaloader` supports session file injection — a logged-in session raises the rate limit significantly
-- **Exponential backoff with jitter:** retry after randomised delays
-- **Rotating proxies:** residential IP rotation to distribute requests
-These are natural next iterations for high-volume use.
+Üretim için hafifletmeler (uygulanmamıştır, şeffaflık için belgelenmiştir):
+- **Oturumlu kimlik doğrulama:** `instaloader` oturum dosyası enjeksiyonunu destekler; giriş yapılmış oturum hız sınırını belirgin biçimde yükseltir
+- **Jitter'lı üstel geri çekilme:** rastgele gecikmelerle yeniden deneme
+- **Dönen proxy'ler:** istekleri dağıtmak için konut IP döndürme
+Bunlar yüksek hacimli kullanım için doğal sonraki iterasyonlardır.
 
-## Trade-offs
+## Ödünleşimler
 
-| Decision | Upside | Downside |
+| Karar | Artı | Eksi |
 |---|---|---|
-| CLIP zero-shot | No training data, brand-agnostic | Lower precision than fine-tuned model |
-| Groq as default LLM | Free, fast, no credit card | Rate limits at high volume |
-| BFS crawler | Simple, predictable | Misses JS-rendered product listings |
-| No Playwright | Simpler, faster | Misses React/Next.js shops |
-| instaloader | No API key needed | Fragile to Instagram rate limits |
-| pHash dedup | Catches CDN/size variants | Can miss semantically duplicate shoots |
+| CLIP sıfır-örnek | Eğitim verisi gerekmez, markadan bağımsız | İnce ayarlı modelden düşük kesinlik |
+| Varsayılan LLM olarak Groq | Ücretsiz, hızlı, kredi kartı yok | Yüksek hacimde hız sınırı |
+| BFS tarayıcı | Basit, öngörülebilir | JS ile çizilen ürün listelerini kaçırır |
+| Playwright yok | Daha basit, daha hızlı | React/Next.js mağazalarını kaçırır |
+| instaloader | API anahtarı gerekmez | Instagram hız sınırlarına kırılgan |
+| pHash kopya ayıklama | CDN/boyut varyantlarını yakalar | Anlamsal olarak aynı çekimleri kaçırabilir |
 
-## What Would Change With More Time
+## Daha fazla zaman olsaydı neler değişirdi
 
-**Higher priority:**
+**Daha yüksek öncelik:**
 
-1. **Playwright integration** — Many DTC brands use Next.js or Shopify Hydrogen. A headless browser fallback in `WebsiteCrawler` would recover these. The architecture has a clean injection point: the crawler returns `PageContent[]` regardless of fetch method.
+1. **Playwright entegrasyonu:** Birçok doğrudan tüketiciye satış yapan marka Next.js veya Shopify Hydrogen kullanır. `WebsiteCrawler` içinde başsız tarayıcı yedeği bunları kazandırır. Mimari temiz bir enjeksiyon noktası sunar: tarayıcı, çekme yönteminden bağımsız olarak `PageContent[]` döndürür.
 
-2. **Fine-tuned fashion classifier** — A lightweight ViT trained on DeepFashion2 would give precise garment-level labels (not binary fashion/non-fashion), producing richer garment mix data. The `FashionClassifier` class is designed for drop-in replacement.
+2. **İnce ayarlı moda sınıflandırıcı:** DeepFashion2 üzerinde eğitilmiş hafif bir ViT, ikili (moda/moda değil) yerine kesin giysi düzeyinde etiketler vererek daha zengin bir giysi karması verisi üretir. `FashionClassifier` sınıfı doğrudan yerine konabilecek biçimde tasarlanmıştır.
 
-3. **Instagram session auth** — Injecting a session cookie via instaloader raises the practical rate limit from ~15 to hundreds of posts per run. One `.env` variable (`INSTAGRAM_SESSION_FILE`) would be sufficient.
+3. **Instagram oturum kimlik doğrulaması:** instaloader ile oturum çerezi eklemek, pratik hız sınırını çalıştırma başına ~15'ten yüzlerce gönderiye çıkarır. Tek bir `.env` değişkeni (`INSTAGRAM_SESSION_FILE`) yeterli olur.
 
-4. **Vector-store deduplication** — At 10k+ images, pHash iteration becomes slow. FAISS or Qdrant over CLIP embeddings would replace it with sub-linear lookup.
+4. **Vektör deposuyla kopya ayıklama:** 10 bin+ görselde pHash taraması yavaşlar. CLIP gömmeleri üzerinde FAISS veya Qdrant, bunu doğrusal altı aramayla değiştirir.
 
-5. **Structured caching** — Re-running against the same brand should skip already-downloaded images. A SQLite store keyed by URL hash would cut second-run time by ~80%.
+5. **Yapılandırılmış önbellek:** Aynı markaya yeniden çalıştırmada zaten indirilmiş görseller atlanmalıdır. URL karmasıyla anahtarlanan bir SQLite deposu ikinci çalıştırma süresini yaklaşık %80 kısaltır.
 
-## Operationalising for Thousands of Brands
+## Binlerce marka için işletim
 
-- Wrap the agent in a task queue (Celery + Redis or AWS SQS). Each brand config is a message.
-- Store outputs in object storage (S3/GCS) keyed by `brand_slug/run_id/`.
-- Move CLIP inference to a GPU batch endpoint (Replicate or self-hosted Triton) — at scale, embedding computation dominates over I/O.
-- Cache pages and images in a content-addressed store to avoid re-downloading unchanged assets across runs.
-- Parameterise LLM calls for cost control: Groq for first-pass synthesis, Claude only for final positioning statements where quality matters most.
-- Ship structured logs (already in place via structlog) to a log aggregator; emit per-brand metrics (image count, pages crawled, run duration) to a time-series store for SLA monitoring.
+- Ajanı bir görev kuyruğuna (Celery + Redis veya AWS SQS) sarın. Her marka yapılandırması bir mesajdır.
+- Çıktıları `marka_slug/run_id/` anahtarıyla nesne depolamada (S3/GCS) saklayın.
+- CLIP çıkarımını GPU toplu uç noktasına (Replicate veya kendi barındırdığınız Triton) taşıyın; ölçekte gömme hesabı G/Ç'nin önüne geçer.
+- Çalıştırmalar arasında değişmeyen varlıkları yeniden indirmemek için sayfaları ve görselleri içerik adresli depoda önbelleğe alın.
+- Maliyet kontrolü için LLM çağrılarını parametreleyin: ilk geçiş sentezi için Groq, kalitenin en çok önem taşıdığı son konumlandırma ifadeleri için yalnızca Claude.
+- Yapılandırılmış günlükleri (structlog ile zaten mevcut) bir günlük toplayıcıya gönderin; SLA izleme için marka başına metrikleri (görsel sayısı, taranan sayfa, çalışma süresi) zaman serisi deposuna yazın.
