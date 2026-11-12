@@ -19,7 +19,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-RUN mkdir -p outputs logs
+RUN useradd --create-home --uid 10001 agent \
+    && mkdir -p outputs logs \
+    && chown -R agent:agent /app
+USER agent
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1

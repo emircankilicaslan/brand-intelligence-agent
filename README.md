@@ -1,5 +1,7 @@
 # Brand Intelligence Agent
 
+![CI](https://github.com/emircankilicaslan/brand-intelligence-agent/actions/workflows/ci.yml/badge.svg)
+
 Autonomously produces a structured **Brand DNA dossier** (color palette, visual clusters, brand voice and audience signals) for any fashion brand, given only a name, a URL and an optional Instagram handle.
 
 ---
@@ -123,7 +125,8 @@ outputs/brand_name/
 ## Tests
 
 ```bash
-pytest tests/ -v
+pip install -r requirements-test.txt   # ağır CLIP/torch bağımlılıkları olmadan çalışır
+python -m pytest tests -v
 ```
 
 Tests cover: config loading, deduplication (exact and distinct), color palette extraction, page type classification, domain checking, image URL extraction and a PDF generation smoke test.
