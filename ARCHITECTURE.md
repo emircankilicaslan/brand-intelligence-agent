@@ -75,8 +75,8 @@ CLIP, görselleri anlamsal olarak anlamlı 512 boyutlu bir uzaya yansıtır; ben
 ### 7. Ayarlanabilir aralıklı asenkron toplama
 Hem tarayıcı hem görsel indirici tamamen asenkrondur (aiohttp + asyncio). Bir semafor eşzamanlı istekleri `MAX_CONCURRENT_REQUESTS` (varsayılan 4) ile sınırlar. Sayfa çekimleri arasına istek başına `REQUEST_DELAY_MS` (varsayılan 800 ms) bekleme konur. Her iki değer `.env` içinde ayarlanabilir; işletenler hedef siteye göre hız ile nezaket arasında denge kurabilir.
 
-### 8. Her aşamada zarif hata yönetimi
-Her ana aşama (web taraması, görsel indirme, Instagram, LLM sentezi) try/except ile sarılıdır. Hatalar `[warning]` veya `[error]` düzeyinde yapılandırılmış olay olarak kaydedilir ve hat devam eder. Instagram'ı engelli ve LLM'i kesintide olan bir marka için bile görsel verili geçerli bir PDF üretilir. Bu bilinçli bir tasarım tercihidir: kısmi değer, çökmeden her zaman daha iyidir.
+### 8. Her aşamada kademeli hata yönetimi
+Her ana aşama (web taraması, görsel indirme, Instagram, LLM sentezi) try/except ile sarılıdır. Hatalar `[warning]` veya `[error]` düzeyinde yapılandırılmış olay olarak kaydedilir ve hat devam eder. Instagram'ı engelli ve LLM'i kesintide olan bir marka için bile görsel verili geçerli bir PDF üretilir. Bu bilinçli bir tasarım kararıdır: kısmi sonuç üretmek, hatayla durmaktan önceliklidir.
 
 ### 9. Instagram hız sınırı: tasarım kararı ve hafifletme
 `instaloader` oturumsuz, herkese açık modda kullanılır. Instagram, oturumsuz erişimde sert hız sınırı uygular (genellikle 10–15 istekten sonra HTTP 429). Ajan:
@@ -101,7 +101,7 @@ Bunlar yüksek hacimli kullanım için doğal sonraki iterasyonlardır.
 | instaloader | API anahtarı gerekmez | Instagram hız sınırlarına kırılgan |
 | pHash kopya ayıklama | CDN/boyut varyantlarını yakalar | Anlamsal olarak aynı çekimleri kaçırabilir |
 
-## Daha fazla zaman olsaydı neler değişirdi
+## Planlanan geliştirmeler
 
 **Daha yüksek öncelik:**
 
