@@ -112,6 +112,18 @@ Hiçbiri yoksa görsel analiz (görseller, renkler, kümeler) yine tam olarak ç
 
 ---
 
+## Örnek çıktı
+
+Aşağıdaki sayfalar **kurgusal bir marka** ve yer tutucu görsellerle üretilmiş örnek bir rapordur; gerçek bir markanın verisi değildir. Rapor biçimini göstermek içindir. Tam PDF: [docs/ornek/ornek_marka_brand_dna.pdf](docs/ornek/ornek_marka_brand_dna.pdf)
+
+| Kapak | Görsel kimlik | Marka sesi |
+| :---: | :---: | :---: |
+| <img src="docs/ornek/sayfa_1.png" width="220" alt="Kapak"> | <img src="docs/ornek/sayfa_2.png" width="220" alt="Renk paleti ve siluetler"> | <img src="docs/ornek/sayfa_3.png" width="220" alt="Marka sesi"> |
+
+Aynı raporu yeniden üretmek için: `python scripts/ornek_rapor_uret.py`
+
+---
+
 ## Çıktı
 
 ```
@@ -176,6 +188,7 @@ Testler şunları kapsar: yapılandırma yükleme, kopya ayıklama (birebir ve f
 - İçeriği istemci tarafında oluşturan tek sayfa uygulamalar (React, Next.js) daha az görsel verebilir. Bir Playwright yedeği bunu çözer.
 - Instagram toplama, oturumsuz modda hız sınırına duyarlıdır. Bir oturum çerezi güvenilirliği belirgin biçimde artırır.
 - CLIP model ağırlıkları (~600 MB) ilk çalıştırmada indirilir ve yerelde önbelleğe alınır.
+- PDF'te ı, ş, ğ gibi harfler için Unicode destekli bir yazı tipi gerekir (DejaVu Sans, Liberation Sans veya Arial); Docker imajına DejaVu eklenmiştir. Hiçbiri bulunamazsa Helvetica'ya düşülür ve bu harfler kare olarak görünür (günlükte `unicode_font_not_found` uyarısı çıkar).
 - PDF görsel kalitesi kaynak çözünürlükle sınırlıdır; çok düşük kaliteli özgün görseller raporda yumuşak görünür.
 - Ajan kararlı bir ağ varsayar. Geçici hatalar bir kez yeniden denenir; kalıcı hatalar yapılandırılmış bir günlük kaydıyla atlanır.
 

@@ -9,6 +9,8 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm, mm
 from reportlab.lib.utils import ImageReader
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import (
     BaseDocTemplate,
     Frame,
@@ -27,6 +29,43 @@ from agent.logging_setup import get_logger
 from agent.models import BrandDNA
 
 logger = get_logger(__name__)
+
+# Yerleşik Helvetica yalnızca Latin-1 karakterleri çizer; ı, ş, ğ gibi harfler
+# siyah kare çıkar. Unicode destekli bir TrueType ailesi bulunursa o kullanılır.
+_FONT_FAMILIES = [
+    ("DejaVuSans", ["DejaVuSans.ttf", "DejaVuSans-Bold.ttf", "DejaVuSans-Oblique.ttf"]),
+    ("Arial", ["arial.ttf", "arialbd.ttf", "ariali.ttf"]),
+    ("LiberationSans", ["LiberationSans-Regular.ttf", "LiberationSans-Bold.ttf", "LiberationSans-Italic.ttf"]),
+]
+_FONT_DIRS = [
+    "/usr/share/fonts/truetype/dejavu",
+    "/usr/share/fonts/truetype/liberation",
+    "/usr/share/fonts/dejavu",
+    "/usr/share/fonts/TTF",
+    "/Library/Fonts",
+    "/System/Library/Fonts/Supplemental",
+    os.path.join(os.environ.get("WINDIR", "C:/Windows"), "Fonts"),
+]
+
+
+def _register_fonts() -> tuple[str, str, str]:
+    """(normal, kalın, italik) yazı tipi adlarını döndürür; bulunamazsa Helvetica."""
+    for family, files in _FONT_FAMILIES:
+        for directory in _FONT_DIRS:
+            paths = [os.path.join(directory, f) for f in files]
+            if all(os.path.isfile(p) for p in paths):
+                names = (family, f"{family}-Bold", f"{family}-Italic")
+                try:
+                    for name, path in zip(names, paths):
+                        pdfmetrics.registerFont(TTFont(name, path))
+                    return names
+                except Exception:  # bozuk font dosyası: sıradakini dene
+                    continue
+    logger.warning("unicode_font_not_found", fallback="Helvetica")
+    return ("Helvetica", "Helvetica-Bold", "Helvetica-Oblique")
+
+
+FONT_REGULAR, FONT_BOLD, FONT_ITALIC = _register_fonts()
 
 PAGE_W, PAGE_H = A4
 MARGIN = 2.2 * cm
@@ -49,7 +88,7 @@ def _build_styles() -> dict:
         fontSize=36,
         leading=42,
         textColor=PALETTE_DARK,
-        fontName="Helvetica-Bold",
+        fontName=FONT_BOLD,
         spaceAfter=8,
     )
     styles["cover_subtitle"] = ParagraphStyle(
@@ -57,7 +96,7 @@ def _build_styles() -> dict:
         fontSize=11,
         leading=16,
         textColor=PALETTE_LIGHT,
-        fontName="Helvetica",
+        fontName=FONT_REGULAR,
         spaceAfter=4,
         tracking=60,
     )
@@ -66,7 +105,7 @@ def _build_styles() -> dict:
         fontSize=9,
         leading=12,
         textColor=PALETTE_ACCENT,
-        fontName="Helvetica-Bold",
+        fontName=FONT_BOLD,
         spaceBefore=18,
         spaceAfter=6,
         tracking=120,
@@ -76,7 +115,7 @@ def _build_styles() -> dict:
         fontSize=16,
         leading=22,
         textColor=PALETTE_DARK,
-        fontName="Helvetica-Bold",
+        fontName=FONT_BOLD,
         spaceBefore=4,
         spaceAfter=10,
     )
@@ -85,7 +124,7 @@ def _build_styles() -> dict:
         fontSize=10,
         leading=16,
         textColor=PALETTE_MID,
-        fontName="Helvetica",
+        fontName=FONT_REGULAR,
         spaceAfter=8,
     )
     styles["body_bold"] = ParagraphStyle(
@@ -93,7 +132,7 @@ def _build_styles() -> dict:
         fontSize=10,
         leading=16,
         textColor=PALETTE_DARK,
-        fontName="Helvetica-Bold",
+        fontName=FONT_BOLD,
         spaceAfter=4,
     )
     styles["caption"] = ParagraphStyle(
@@ -101,7 +140,7 @@ def _build_styles() -> dict:
         fontSize=8,
         leading=11,
         textColor=PALETTE_LIGHT,
-        fontName="Helvetica-Oblique",
+        fontName=FONT_ITALIC,
         spaceAfter=4,
     )
     styles["tag"] = ParagraphStyle(
@@ -109,7 +148,7 @@ def _build_styles() -> dict:
         fontSize=9,
         leading=13,
         textColor=PALETTE_DARK,
-        fontName="Helvetica",
+        fontName=FONT_REGULAR,
         spaceAfter=3,
         leftIndent=8,
     )
@@ -118,7 +157,7 @@ def _build_styles() -> dict:
         fontSize=8,
         leading=12,
         textColor=PALETTE_LIGHT,
-        fontName="Helvetica",
+        fontName=FONT_REGULAR,
         spaceAfter=2,
     )
     return styles
@@ -149,7 +188,7 @@ def _color_swatch_table(palette) -> Table | None:
         r, g, b = sw.rgb
         cell_color = colors.Color(r / 255, g / 255, b / 255)
         top_row.append("")
-        bot_row.append(Paragraph(f"{sw.hex}\n{sw.name}", ParagraphStyle("sw", fontSize=7, leading=10, fontName="Helvetica", textColor=PALETTE_MID)))
+        bot_row.append(Paragraph(f"{sw.hex}\n{sw.name}", ParagraphStyle("sw", fontSize=7, leading=10, fontName=FONT_REGULAR, textColor=PALETTE_MID)))
 
     col_w = BODY_W / max(len(palette[:7]), 1)
     t = Table([top_row, bot_row], colWidths=[col_w] * len(palette[:7]))
@@ -212,7 +251,7 @@ def _image_grid(image_paths: list[str], cols: int = 3) -> Table | None:
 def _on_page(canvas, doc, brand_name: str, generated_at: str):
     canvas.saveState()
     if doc.page > 1:
-        canvas.setFont("Helvetica", 7)
+        canvas.setFont(FONT_REGULAR, 7)
         canvas.setFillColor(PALETTE_LIGHT)
         canvas.drawString(MARGIN, 15 * mm, brand_name.upper() + " — BRAND DNA")
         canvas.drawRightString(PAGE_W - MARGIN, 15 * mm, str(doc.page))
@@ -265,11 +304,11 @@ def generate_pdf(dna: BrandDNA, output_path: str) -> str:
     ]
     stat_table = Table(stats, colWidths=[5 * cm, 4 * cm])
     stat_table.setStyle(TableStyle([
-        ("FONTNAME", (0, 0), (-1, -1), "Helvetica"),
+        ("FONTNAME", (0, 0), (-1, -1), FONT_REGULAR),
         ("FONTSIZE", (0, 0), (-1, -1), 9),
         ("TEXTCOLOR", (0, 0), (0, -1), PALETTE_LIGHT),
         ("TEXTCOLOR", (1, 0), (1, -1), PALETTE_DARK),
-        ("FONTNAME", (1, 0), (1, -1), "Helvetica-Bold"),
+        ("FONTNAME", (1, 0), (1, -1), FONT_BOLD),
         ("LEFTPADDING", (0, 0), (-1, -1), 0),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
         ("TOPPADDING", (0, 0), (-1, -1), 0),

@@ -215,3 +215,22 @@ def test_pdf_generation_smoke(tmp_path):
     result = generate_pdf(dna, out)
     assert Path(result).exists()
     assert Path(result).stat().st_size > 5000
+
+
+def test_pdf_turkish_characters_are_embedded_in_font(tmp_path):
+    """ı, ş, ğ gibi harfler için Unicode destekli font seçilmeli (Helvetica siyah kare çizer)."""
+    from agent.models import BrandDNA
+    from synthesizers import pdf_generator
+
+    if pdf_generator.FONT_REGULAR == "Helvetica":
+        import pytest
+        pytest.skip("Sistemde Unicode destekli font yok")
+
+    dna = BrandDNA(
+        brand_name="Işıklı Çiçek",
+        website_url="https://ornek.example",
+        run_id="tr-001",
+        brand_voice="Şık, sade ve özenli.",
+    )
+    out = pdf_generator.generate_pdf(dna, str(tmp_path / "tr.pdf"))
+    assert Path(out).stat().st_size > 5000
