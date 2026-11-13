@@ -1,6 +1,6 @@
 # Brand Intelligence Agent
 
-![CI](https://github.com/emircankilicaslan/brand-intelligence-agent/actions/workflows/ci.yml/badge.svg)
+![CI](https://github.com/emircankilicaslan/brand-intelligence-agent/actions/workflows/ci.yml/badge.svg) ![Lisans: MIT](https://img.shields.io/badge/Lisans-MIT-green.svg)
 
 > **English summary:** Given only a brand name, a URL and an optional Instagram handle, this Python agent crawls the brand's website, filters and clusters fashion images (CLIP + KMeans), extracts a color palette, synthesizes brand voice and audience with an LLM (Groq → Ollama → Anthropic fallback) and renders a PDF "Brand DNA" dossier. Config-driven, Dockerized, unit-tested, CI on GitHub Actions.
 
@@ -178,3 +178,7 @@ Testler şunları kapsar: yapılandırma yükleme, kopya ayıklama (birebir ve f
 - CLIP model ağırlıkları (~600 MB) ilk çalıştırmada indirilir ve yerelde önbelleğe alınır.
 - PDF görsel kalitesi kaynak çözünürlükle sınırlıdır; çok düşük kaliteli özgün görseller raporda yumuşak görünür.
 - Ajan kararlı bir ağ varsayar. Geçici hatalar bir kez yeniden denenir; kalıcı hatalar yapılandırılmış bir günlük kaydıyla atlanır.
+
+## Lisans
+
+Bu proje [MIT Lisansı](LICENSE) ile paylaşılmaktadır.
